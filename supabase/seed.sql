@@ -1,0 +1,3 @@
+-- Nessuna voce linguistica dimostrativa è pubblicata come dato reale.
+-- Le fixture sintetiche di tests/fixtures.ts sono riservate ai test.
+-- Usare l'importatore per mettere dati reali in coda di revisione.

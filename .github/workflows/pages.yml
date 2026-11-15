@@ -25,8 +25,9 @@ jobs:
         run: npm run build
         env:
           VITE_BASE_PATH: ${{ vars.VITE_BASE_PATH || '/lisas-dictionary/' }}
-          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL }}
-          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY }}
+          # Parametri pubblici del client; le variabili del repository possono sostituirli.
+          VITE_SUPABASE_URL: ${{ vars.VITE_SUPABASE_URL || 'https://bodecqhevwwwykuntsxg.supabase.co' }}
+          VITE_SUPABASE_PUBLISHABLE_KEY: ${{ vars.VITE_SUPABASE_PUBLISHABLE_KEY || 'sb_publishable_ROj9kZiRTHD1kY1DMB7sjQ_6I-ubdn-' }}
           VITE_TURNSTILE_SITE_KEY: ${{ vars.VITE_TURNSTILE_SITE_KEY }}
           VITE_CONTRIBUTIONS_ENABLED: ${{ vars.VITE_CONTRIBUTIONS_ENABLED || 'false' }}
           VITE_PRIVACY_CONTROLLER: ${{ vars.VITE_PRIVACY_CONTROLLER }}

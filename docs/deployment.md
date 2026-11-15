@@ -102,7 +102,11 @@ Prima di raccogliere contributi completa e fai verificare la pagina Privacy in `
 
 Il workflow `.github/workflows/pages.yml` costruisce `dist/` e pubblica su push a `main` o avvio manuale. Scegli **Settings → Pages → Build and deployment → Source → GitHub Actions**.
 
-In **Settings → Secrets and variables → Actions → Variables** aggiungi le variabili `VITE_*` della tabella. Non servono segreti privilegiati nel workflow. Base path predefinito: `/lisas-dictionary/`; per dominio personalizzato o repository `utente.github.io` usa `/`.
+Il workflow contiene URL e publishable key del progetto **Lisas Lexicon** come valori pubblici predefiniti, per collegare il sito anche senza variabili Actions. La publishable key è destinata al browser e non assegna il ruolo amministrativo: autorizzazioni e coda privata restano protette da Auth, grant e RLS. Vedi la [guida Supabase alle chiavi API](https://supabase.com/docs/guides/getting-started/api-keys).
+
+In **Settings → Secrets and variables → Actions → Variables** puoi sostituire quei valori con `VITE_SUPABASE_URL` e `VITE_SUPABASE_PUBLISHABLE_KEY`, per esempio dopo una rotazione della chiave o per un altro ambiente. Le altre variabili `VITE_*` seguono la tabella; i contributi sono disabilitati per impostazione predefinita. Non servono segreti privilegiati nel workflow. Base path predefinito: `/lisas-dictionary/`; per dominio personalizzato o repository `utente.github.io` usa `/`.
+
+Se `actions/configure-pages` restituisce `Get Pages site failed` / `Not Found` dopo test e build riusciti, abilita Pages scegliendo **GitHub Actions** come Source nelle impostazioni indicate sopra, poi rilancia il workflow. Su GitHub Free il repository deve essere pubblico; con un piano compatibile può restare privato. Il cambio di visibilità da solo non attiva Pages.
 
 Destinazione attesa dopo il primo deploy riuscito: `https://claudiacusano-hue.github.io/lisas-dictionary/`. Non è una conferma di pubblicazione. Le schede hanno indirizzi `…/lisas-dictionary/#/segni/UUID`: il refresh non richiede un fallback 404.
 

@@ -102,7 +102,9 @@ test('accesso amministrativo separato dalla consultazione', async ({ page }) => 
   await expect(page.getByLabel('Password', { exact: true })).toBeVisible()
   await expect(page.getByText('Pannello di revisione', { exact: true })).not.toBeVisible()
 })
-test('revisione amministrativa: confronto, decisione motivata e cronologia', async ({ page }) => {
+test('revisione amministrativa: verifica dei vocabolari prima della pubblicazione', async ({
+  page,
+}) => {
   const adminId = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
   const proposalId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
   const user = {
@@ -140,6 +142,29 @@ test('revisione amministrativa: confronto, decisione motivata e cronologia', asy
     version: 1,
     created_at: '2026-11-15T09:00:00Z',
   }
+  const reviewedTerms = terms.map((term) => ({
+    ...term,
+    active: !['part_of_speech', 'selected_fingers'].includes(term.field_code),
+  }))
+  let moderationCalls = 0
+  await page.route('https://lisas-test.supabase.co/rest/v1/vocabulary_terms*', (route) =>
+    route.fulfill({ contentType: 'application/json', body: JSON.stringify(reviewedTerms) }),
+  )
+  await page.route(
+    'https://lisas-test.supabase.co/rest/v1/rpc/review_vocabulary',
+    async (route) => {
+      const input = route.request().postDataJSON()
+      expect(input.p_active).toBe(true)
+      expect(input.p_reason).toBe('Verifica individuale della fonte di test')
+      const term = reviewedTerms.find(
+        (term) => term.field_code === input.p_field && term.code === input.p_code,
+      )
+      expect(term).toBeDefined()
+      term!.active = true
+      term!.label = input.p_label
+      await route.fulfill({ contentType: 'application/json', body: 'null' })
+    },
+  )
   await page.route('https://lisas-test.supabase.co/auth/v1/user', (route) =>
     route.fulfill({ contentType: 'application/json', body: JSON.stringify(user) }),
   )
@@ -161,6 +186,7 @@ test('revisione amministrativa: confronto, decisione motivata e cronologia', asy
   await page.route(
     'https://lisas-test.supabase.co/rest/v1/rpc/moderate_proposal',
     async (route) => {
+      moderationCalls += 1
       expect(route.request().postDataJSON()).toMatchObject({
         p_id: proposalId,
         p_version: 1,
@@ -177,8 +203,29 @@ test('revisione amministrativa: confronto, decisione motivata e cronologia', asy
   await expect(page.getByRole('heading', { name: 'Dati della nuova scheda' })).toBeVisible()
   await expect(page.getByRole('table')).toBeVisible()
   await page.getByLabel('Motivazione (richiesta)').fill('Fonte verificata nel test')
-  await page.getByRole('button', { name: 'Approva e pubblica', exact: true }).click()
+  const approve = page.getByRole('button', { name: 'Approva e pubblica', exact: true })
+  await expect(approve).toBeDisabled()
+  await expect(
+    page.getByText('Prima di pubblicare, verifica i vocabolari.', { exact: true }),
+  ).toBeVisible()
+  await page.getByRole('button', { name: /Categoria di test/ }).click()
+  await page
+    .getByLabel('Motivazione della verifica', { exact: true })
+    .fill('Verifica individuale della fonte di test')
+  await page.getByRole('button', { name: 'Approva e attiva valore', exact: true }).click()
+  await expect(page.getByRole('button', { name: /Configurazione di test/ })).toBeVisible()
+  await expect(approve).toBeDisabled()
+  expect(moderationCalls).toBe(0)
+  await page.getByRole('button', { name: /Configurazione di test/ }).click()
+  await page
+    .getByLabel('Motivazione della verifica', { exact: true })
+    .fill('Verifica individuale della fonte di test')
+  await page.getByRole('button', { name: 'Approva e attiva valore', exact: true }).click()
+  await expect(approve).toBeEnabled()
+  expect(moderationCalls).toBe(0)
+  await approve.click()
   await expect(page.getByText('Nuovo segno · Approvata', { exact: true })).toBeVisible()
+  expect(moderationCalls).toBe(1)
   const results = await new AxeBuilder({ page })
     .withTags(['wcag2a', 'wcag2aa', 'wcag21aa', 'wcag22aa'])
     .analyze()

@@ -56,6 +56,10 @@ La CLI aggiunge il checksum alla provenienza. La transazione inserisce soltanto 
 3. Apri ogni proposta e verifica gli avvisi e l’originale scaricabile in Fonte di importazione. L’originale rimane privato, distinto dalla scheda corrente dopo una correzione.
 4. Controlla i duplicati, completa provenienza e annotazioni, salva eventuali correzioni e approva.
 
+Nella singola proposta, **Decisione di revisione → Valori usati nella proposta** mostra i valori ancora da verificare e consente di aprirli e attivarli individualmente, con fonte, etichetta e motivazione. **Approva e pubblica** rimane disabilitato finché tutti i valori usati dalla scheda, comprese le realizzazioni degli esempi, sono attivi. Un valore mancante richiede la correzione della proposta o l’importazione di un inventario verificabile. La motivazione della scheda non sostituisce la verifica dei vocabolari.
+
+L’attivazione di un valore lo rende utilizzabile anche da altre schede che usano lo stesso percorso e codice. Non approva quelle schede e non attiva altri valori automaticamente.
+
 Revisione del vocabolario e pubblicazione sono atti distinti. Non è prevista attivazione di massa dei valori osservati. Per i campi non rappresentabili risolvi la convenzione e aggiungi migrazione e adattatore; non forzarli in un parametro diverso.
 
 ## Percorsi gestiti

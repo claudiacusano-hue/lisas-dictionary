@@ -16,6 +16,7 @@ import {
 } from '../lib/api'
 import { useAsync, useVocabulary, dateLabel } from '../lib/context'
 import { documentLines } from '../lib/diff'
+import { vocabularyRequirements } from '../lib/vocabulary'
 import { DocumentEditor } from '../components/DocumentEditor'
 import { DocumentView } from '../components/DocumentView'
 import { DownloadButton, Loading, Notice, PageHeading } from '../components/ui'
@@ -286,7 +287,7 @@ function Queue() {
     </>
   )
 }
-function VocabularyReview() {
+function VocabularyReview({ document }: { document?: SignDocument }) {
   const { fields, terms, reload } = useVocabulary()
   const [field, setField] = useState('')
   const [onlyPending, setOnlyPending] = useState(true)
@@ -295,8 +296,12 @@ function VocabularyReview() {
   const [reason, setReason] = useState('')
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const required = document ? vocabularyRequirements(document, fields, terms) : null
   const rows = terms.filter(
-    (t) => (!field || t.field_code === field) && (!onlyPending || !t.active),
+    (t) =>
+      (!required || required.some((r) => r.field_code === t.field_code && r.code === t.code)) &&
+      (!field || t.field_code === field) &&
+      (!onlyPending || !t.active),
   )
   const save = async (e: FormEvent) => {
     e.preventDefault()
@@ -316,21 +321,24 @@ function VocabularyReview() {
   }
   return (
     <section className="section-pad">
-      <h2>Vocabolari e valori osservati</h2>
+      <h2>{document ? 'Valori usati nella proposta' : 'Vocabolari e valori osservati'}</h2>
       <p>
         I valori importati sono inattivi. Verifica il percorso LISAS, la fonte e l’etichetta prima
-        di renderli disponibili nei menu. L’attivazione non pubblica automaticamente alcuna scheda.
+        di renderli disponibili nei menu. Ogni valore attivato potrà essere usato anche da altre
+        schede; l’attivazione non pubblica automaticamente alcuna proposta.
       </p>
       <div className="queue-filters">
         <label className="field">
           Parametro
           <select value={field} onChange={(e) => setField(e.target.value)}>
             <option value="">Tutti i parametri</option>
-            {fields.map((f) => (
-              <option key={f.code} value={f.code}>
-                {f.label}
-              </option>
-            ))}
+            {fields
+              .filter((f) => !required || required.some((r) => r.field_code === f.code))
+              .map((f) => (
+                <option key={f.code} value={f.code}>
+                  {f.label}
+                </option>
+              ))}
           </select>
         </label>
         <label className="checkbox-label">
@@ -432,7 +440,13 @@ function Review() {
   )
 }
 function ReviewDetail({ proposal: p, refresh }: { proposal: Proposal; refresh: () => void }) {
-  const { fields, terms } = useVocabulary()
+  const {
+    fields,
+    terms,
+    loading: vocabularyLoading,
+    error: vocabularyError,
+    reload: reloadVocabulary,
+  } = useVocabulary()
   const [document, setDocument] = useState(p.document)
   const [reason, setReason] = useState('')
   const [busy, setBusy] = useState(false)
@@ -456,6 +470,10 @@ function ReviewDetail({ proposal: p, refresh }: { proposal: Proposal; refresh: (
   const editable = p.status === 'pending' || p.status === 'needs_clarification'
   const dirty = JSON.stringify(document) !== JSON.stringify(p.document)
   const conflict = current.data && p.base_revision !== current.data.revision
+  const vocabularyBlockers = vocabularyRequirements(document, fields, terms).filter(
+    (requirement) => !requirement.term?.active,
+  )
+  const missingTerms = vocabularyBlockers.filter((requirement) => !requirement.term)
   const save = async () => {
     setError('')
     setMessage('')
@@ -475,6 +493,7 @@ function ReviewDetail({ proposal: p, refresh }: { proposal: Proposal; refresh: (
     setMessage('')
     setBusy(true)
     try {
+      if (action === 'approved') validateDocument(document, fields, terms)
       await moderate(p, action, reason)
       setMessage('Decisione registrata.')
       refresh()
@@ -663,6 +682,39 @@ function ReviewDetail({ proposal: p, refresh }: { proposal: Proposal; refresh: (
       {editable && (
         <section className="moderation-actions">
           <h2>Decisione di revisione</h2>
+          {vocabularyLoading ? (
+            <Loading />
+          ) : vocabularyError ? (
+            <Notice error>
+              Non è stato possibile verificare i vocabolari.
+              <button onClick={reloadVocabulary}>Riprova</button>
+            </Notice>
+          ) : vocabularyBlockers.length > 0 ? (
+            <>
+              <Notice>
+                <strong>Prima di pubblicare, verifica i vocabolari.</strong>
+                <p>
+                  Questa scheda usa {vocabularyBlockers.length} valori ancora da verificare.
+                  Seleziona ciascun valore qui sotto, controlla la fonte e registra una motivazione
+                  per attivarlo. La motivazione della scheda è una decisione distinta.
+                </p>
+              </Notice>
+              {missingTerms.length > 0 && (
+                <Notice error>
+                  Alcuni valori non sono presenti nel vocabolario. Correggi la proposta o importa
+                  l’inventario verificabile prima di pubblicare:
+                  <ul>
+                    {missingTerms.map((term) => (
+                      <li key={JSON.stringify([term.field_code, term.code])}>
+                        {term.fieldLabel}: {term.code}
+                      </li>
+                    ))}
+                  </ul>
+                </Notice>
+              )}
+              <VocabularyReview document={document} />
+            </>
+          ) : null}
           <label className="field">
             Motivazione (richiesta)
             <textarea
@@ -704,6 +756,9 @@ function ReviewDetail({ proposal: p, refresh }: { proposal: Proposal; refresh: (
                 duplicates.loading ||
                 Boolean(duplicates.error) ||
                 Boolean(current.error) ||
+                vocabularyLoading ||
+                Boolean(vocabularyError) ||
+                vocabularyBlockers.length > 0 ||
                 imported.loading ||
                 Boolean(imported.error)
               }

@@ -1,6 +1,6 @@
 import { PGlite } from '@electric-sql/pglite'
 import { beforeAll, afterAll, describe, expect, it } from 'vitest'
-import { readFile } from 'node:fs/promises'
+import { readFile, readdir } from 'node:fs/promises'
 import { documentFixture, terms, proposalFixture } from './fixtures'
 import type { SignDocument } from '../supabase/functions/_shared/domain'
 import { importLisas } from '../supabase/functions/_shared/lisas'
@@ -43,12 +43,9 @@ beforeAll(async () => {
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
     grant usage on schema public,auth to anon,authenticated,service_role;
     insert into auth.users values('${admin}'),('${outsider}');`)
-  await db.exec(
-    await readFile(
-      new URL('../supabase/migrations/202611150001_lexicon.sql', import.meta.url),
-      'utf8',
-    ),
-  )
+  const migrations = new URL('../supabase/migrations/', import.meta.url)
+  for (const file of (await readdir(migrations)).filter((file) => file.endsWith('.sql')).sort())
+    await db.exec(await readFile(new URL(file, migrations), 'utf8'))
   await db.query('insert into public.admin_profiles(user_id) values($1)', [admin])
   for (const t of terms)
     await db.query(
@@ -61,6 +58,90 @@ afterAll(async () => {
 })
 
 describe('schema PostgreSQL e autorizzazioni reali', () => {
+  it('riserva la creazione amministrativa ai revisori senza aprire gli invii anonimi', async () => {
+    const { email: _email, consent: _consent, ...input } = proposalFixture()
+    input.notes = 'Completamento preparato dal revisore'
+    for (const [name, user] of [
+      ['anon', null],
+      ['authenticated', outsider],
+      ['authenticated', null],
+    ] as const)
+      await expect(
+        role(name, user, () => rpc('public.submit_admin_proposal($1)', [JSON.stringify(input)])),
+      ).rejects.toThrow()
+    await expect(
+      role('authenticated', admin, () =>
+        rpc('app_private.create_proposal($1,null)', [JSON.stringify(input)]),
+      ),
+    ).rejects.toThrow('permission denied')
+    await expect(
+      role('authenticated', admin, () =>
+        rpc('public.submit_proposal($1)', [JSON.stringify(proposalFixture())]),
+      ),
+    ).rejects.toThrow('permission denied')
+  })
+  it('salva il completamento del revisore in coda con autore e motivazione, poi lo pubblica solo dopo approvazione', async () => {
+    const sid = await approve(await submit(documentFixture('COMPLETAMENTO REVISORE TEST')))
+    const current = await rpc<{ document: SignDocument }>('public.get_sign($1)', [sid])
+    current.document.description = 'Descrizione aggiunta dal revisore'
+    const input = {
+      kind: 'completion',
+      target_id: sid,
+      base_revision: 1,
+      document: current.document,
+      notes: 'Aggiunta di informazioni verificate',
+    }
+    const pid = await role('authenticated', admin, () =>
+      rpc<string>('public.submit_admin_proposal($1)', [JSON.stringify(input)]),
+    )
+    expect(
+      (await db.query('select status,consent_at,email from public.proposals where id=$1', [pid]))
+        .rows,
+    ).toEqual([{ status: 'pending', consent_at: null, email: null }])
+    expect(
+      (
+        await db.query('select actor_id,action,reason from public.revisions where proposal_id=$1', [
+          pid,
+        ])
+      ).rows,
+    ).toEqual([{ actor_id: admin, action: 'submitted', reason: input.notes }])
+    expect(await role('anon', null, () => rpc('public.get_sign($1)', [sid]))).toMatchObject({
+      revision: 1,
+      document: { description: '' },
+    })
+    await approve(pid)
+    expect(await role('anon', null, () => rpc('public.get_sign($1)', [sid]))).toMatchObject({
+      revision: 2,
+      document: { description: input.document.description },
+    })
+    await expect(
+      role('authenticated', admin, () =>
+        rpc('public.submit_admin_proposal($1)', [JSON.stringify(input)]),
+      ),
+    ).rejects.toThrow('Scheda aggiornata')
+  })
+  it('valida anche i contributi amministrativi e mantiene il consenso obbligatorio per quelli pubblici', async () => {
+    const { email: _email, consent: _consent, ...input } = proposalFixture()
+    const create = (value: unknown) =>
+      role('authenticated', admin, () =>
+        rpc('public.submit_admin_proposal($1)', [JSON.stringify(value)]),
+      )
+    await expect(create(input)).rejects.toThrow('Testo non valido')
+    input.notes = 'Verifica della fonte'
+    await expect(create({ ...input, consent: true })).rejects.toThrow('Campi non previsti')
+    await expect(create({ ...input, kind: 'completion', base_revision: null })).rejects.toThrow(
+      'Revisione non valida',
+    )
+    input.document.variants[0].annotations[0].term_code = 'NON_APPROVATO'
+    await expect(create(input)).rejects.toThrow('Valore non ammesso')
+    await expect(
+      role('service_role', null, () =>
+        rpc('public.submit_proposal($1)', [
+          JSON.stringify({ ...proposalFixture(), consent: false }),
+        ]),
+      ),
+    ).rejects.toThrow('Consenso richiesto')
+  })
   it('carica inventari controllati senza attivarli e protegge l’operazione', async () => {
     const input = JSON.stringify([
       { field_code: 'location', code: 'TEST_VOCABULARY', label: 'Valore tecnico di test' },

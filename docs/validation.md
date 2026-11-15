@@ -56,6 +56,18 @@ Il successo dell’importatore indica validità tecnica del modello normalizzato
 
 ## Ripetizione e CI
 
+### Correzione del completamento delle schede
+
+Il controllo del sito pubblico ha confermato che la raccolta dei contributi era disabilitata, con site key antispam e dati di configurazione privacy vuoti. Il vecchio modulo consentiva comunque di arrivare al consenso finale, lasciando poi il pulsante di invio disabilitato. Il nuovo percorso riservato ai revisori salva proposte indipendentemente dall’apertura della raccolta pubblica; l’avviso pubblico precede la compilazione.
+
+Verifiche locali della correzione: **41 test superati in cinque suite**, build TypeScript/Vite riuscita e **22 prove browser superate**, su desktop e smartphone. Le nuove prove SQL applicano tutte le migrazioni e controllano accessi anonimi e autenticati senza ruolo, vocabolari validi, revisione di base, motivazione, attribuzione dell’autore, assenza di un consenso fittizio e pubblicazione soltanto dopo approvazione. Le prove browser usano risposte HTTP simulate e coprono completamento e correzione con vocabolari attivi, recupero dopo errore senza perdita dei dati, collegamento alla revisione e avvisi a raccolta chiusa. Le nuove viste controllate non presentano violazioni axe; gli screenshot locali sono in `test-results/`.
+
+La prima esecuzione con quattro worker ha superato il tempo limite in tre prove desktop per il carico iniziale del browser. Con due worker configurati, l’intera suite è passata senza retry.
+
+Dopo conferma del responsabile, la migrazione è stata applicata al progetto remoto con versione `20261115131907`, riportata anche nel nome del file locale. Una prova SQL con ruolo `authenticated` e identità di revisore ha creato un completamento temporaneo, verificato coda privata, autore e motivazione, quindi annullato la transazione. La stessa prova ha confermato il rifiuto di un’identità priva del ruolo. I conteggi prima e dopo restano 1 scheda, 147 proposte e 159 eventi; la scheda pubblicata non è stata modificata. I grant negano agli anonimi la nuova RPC e a tutti i client l’helper privato; l’API pubblica originale rimane accessibile soltanto al servizio Edge. L’advisor segnala anche la nuova RPC tra le funzioni [eseguibili da autenticati](https://supabase.com/docs/guides/database/database-linter?lint=0029_authenticated_security_definer_function_executable): il controllo amministrativo interno è intenzionale e verificato.
+
+### Comandi
+
 ```powershell
 npm ci
 npm test

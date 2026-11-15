@@ -7,7 +7,13 @@ import {
   type ProposalKind,
 } from '../../supabase/functions/_shared/domain'
 import { validateDocument, validateProposal } from '../../supabase/functions/_shared/validation'
-import { contributionsOpen, getSign, searchSigns, submitProposal } from '../lib/api'
+import {
+  contributionsOpen,
+  getSign,
+  searchSigns,
+  submitAdminProposal,
+  submitProposal,
+} from '../lib/api'
 import { useAsync, useVocabulary } from '../lib/context'
 import { DocumentEditor } from '../components/DocumentEditor'
 import { DocumentView } from '../components/DocumentView'
@@ -19,7 +25,12 @@ export const kindLabels = {
   completion: 'Completamento',
   correction: 'Correzione',
 }
-export function Contribute() {
+export function Contribute({ administrative = false }: { administrative?: boolean }) {
+  const stepLabels = [
+    'Scegli il contributo',
+    'Descrivi il segno',
+    administrative ? 'Rivedi e salva' : 'Rivedi e invia',
+  ]
   const [params] = useSearchParams()
   const { fields, terms, error: vocabError, reload } = useVocabulary()
   const [step, setStep] = useState(0)
@@ -115,16 +126,36 @@ export function Contribute() {
       return
     }
     try {
-      if (step === 1) validateDocument(document, fields, terms)
+      if (step === 1) {
+        validateDocument(document, fields, terms)
+        if (administrative && notes.trim().length < 3)
+          throw new Error('Inserisci una motivazione di almeno tre caratteri.')
+      }
       setStep((x) => x + 1)
     } catch (e) {
       setError((e as Error).message)
     }
   }
   const send = async () => {
-    if (!contributionsOpen || busy) return
+    if ((!administrative && !contributionsOpen) || busy) return
     setError('')
     try {
+      if (administrative) {
+        validateDocument(document, fields, terms)
+        if (notes.trim().length < 3)
+          throw new Error('Inserisci una motivazione di almeno tre caratteri.')
+        setBusy(true)
+        setReceipt(
+          await submitAdminProposal({
+            kind,
+            target_id: target,
+            base_revision: base,
+            document,
+            notes,
+          }),
+        )
+        return
+      }
       validateProposal(input(), fields, terms)
       if (!token) throw new Error('Completa il controllo antispam.')
       setBusy(true)
@@ -139,7 +170,7 @@ export function Contribute() {
   }
   if (receipt)
     return (
-      <div className="container page narrow">
+      <div className={administrative ? 'narrow' : 'container page narrow'}>
         <div className="success-state">
           <span className="success-icon">
             <Check size={32} aria-hidden="true" />
@@ -153,32 +184,56 @@ export function Contribute() {
           </p>
           <p>Conserva questo codice per eventuali richieste:</p>
           <code className="receipt">{receipt}</code>
-          <Link className="button primary" to="/esplora">
-            Torna al catalogo <ArrowRight size={17} aria-hidden="true" />
+          <Link
+            className="button primary"
+            to={administrative ? `/admin/proposte/${receipt}` : '/esplora'}
+          >
+            {administrative ? 'Apri la proposta da revisionare' : 'Torna al catalogo'}{' '}
+            <ArrowRight size={17} aria-hidden="true" />
           </Link>
         </div>
       </div>
     )
+  if (!administrative && !contributionsOpen)
+    return (
+      <div className="container page narrow">
+        <PageHeading
+          eyebrow="Partecipa al lessico"
+          title="I contributi pubblici non sono ancora aperti."
+        >
+          <p>
+            Puoi consultare il catalogo. L’invio di nuove schede, completamenti e correzioni sarà
+            disponibile all’apertura della raccolta.
+          </p>
+        </PageHeading>
+        <Notice>
+          Se sei una revisora o un revisore, accedi all’area amministrativa per completare o
+          correggere una scheda.
+        </Notice>
+        <Link
+          className="button primary"
+          to={`/admin/contribuisci${params.size ? `?${params.toString()}` : ''}`}
+        >
+          Accedi per contribuire come revisore <ArrowRight size={17} aria-hidden="true" />
+        </Link>
+      </div>
+    )
   return (
-    <div className="container page form-page">
+    <div className={administrative ? 'form-page' : 'container page form-page'}>
       <PageHeading eyebrow="Partecipa al lessico" title="Ogni contributo conta.">
         <p>
-          Condividi ciò che conosci. Non serve un account e non occorre compilare tutti i parametri.
+          {administrative
+            ? 'Prepara una proposta dal tuo account di revisore. Dopo il salvataggio potrai verificarla e approvarla nel pannello.'
+            : 'Condividi ciò che conosci. Non serve un account e non occorre compilare tutti i parametri.'}
         </p>
       </PageHeading>
-      {!contributionsOpen && (
-        <Notice>
-          Stiamo preparando l’apertura dei contributi. Puoi esplorare il modulo e il riepilogo;
-          l’invio sarà disponibile al termine della configurazione.
-        </Notice>
-      )}
       {vocabError && (
         <Notice error>
           {vocabError} <button onClick={reload}>Riprova</button>
         </Notice>
       )}
       <ol className="steps" aria-label="Passaggi della proposta">
-        {['Scegli il contributo', 'Descrivi il segno', 'Rivedi e invia'].map((label, i) => (
+        {stepLabels.map((label, i) => (
           <li
             key={label}
             className={step === i ? 'current' : step > i ? 'done' : ''}
@@ -190,7 +245,7 @@ export function Contribute() {
         ))}
       </ol>
       <h2 className="sr-only" ref={heading} tabIndex={-1}>
-        {['Scegli il contributo', 'Descrivi il segno', 'Rivedi e invia'][step]}
+        {stepLabels[step]}
       </h2>
       <form
         onSubmit={(e) => {
@@ -294,10 +349,13 @@ export function Contribute() {
           <>
             <DocumentEditor value={document} onChange={setDocument} />
             <section className="form-section">
-              <h2>Note per la revisione</h2>
+              <h2>{administrative ? 'Motivazione del contributo' : 'Note per la revisione'}</h2>
               <label className="field">
-                Spiega la tua proposta (facoltativo)
+                {administrative
+                  ? 'Motivazione (richiesta)'
+                  : 'Spiega la tua proposta (facoltativo)'}
                 <textarea
+                  required={administrative}
                   rows={4}
                   maxLength={4000}
                   value={notes}
@@ -308,17 +366,19 @@ export function Contribute() {
                   linguistici.
                 </small>
               </label>
-              <label className="field">
-                La tua email (facoltativa)
-                <input
-                  type="email"
-                  autoComplete="email"
-                  maxLength={254}
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                />
-                <small>Servirà soltanto per eventuali chiarimenti. Non sarà pubblicata.</small>
-              </label>
+              {!administrative && (
+                <label className="field">
+                  La tua email (facoltativa)
+                  <input
+                    type="email"
+                    autoComplete="email"
+                    maxLength={254}
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                  <small>Servirà soltanto per eventuali chiarimenti. Non sarà pubblicata.</small>
+                </label>
+              )}
             </section>
           </>
         )}
@@ -339,42 +399,52 @@ export function Contribute() {
                 </p>
               )}
             </section>
-            <section className="form-section">
-              <h2>Prima di inviare</h2>
-              <p>
-                La proposta sarà visibile soltanto agli amministratori. Non inserire dati personali
-                nelle descrizioni o negli esempi da pubblicare.
-              </p>
-              <label className="checkbox-label">
-                <input
-                  required
-                  type="checkbox"
-                  checked={consent}
-                  onChange={(e) => setConsent(e.target.checked)}
-                />
-                <span>
-                  Ho letto l’
-                  <Link to="/privacy" target="_blank">
-                    informativa privacy
-                  </Link>{' '}
-                  e acconsento al trattamento dei dati della proposta per la revisione e l’eventuale
-                  pubblicazione delle annotazioni.
-                </span>
-              </label>
-              <div className="honeypot" aria-hidden="true">
-                <label>
-                  Sito web
+            {administrative ? (
+              <section className="form-section">
+                <h2>Prima di salvare</h2>
+                <p>
+                  La proposta sarà salvata in attesa di revisione e associata al tuo account. Aprila
+                  nel pannello per verificarla e approvarne la pubblicazione.
+                </p>
+              </section>
+            ) : (
+              <section className="form-section">
+                <h2>Prima di inviare</h2>
+                <p>
+                  La proposta sarà visibile soltanto agli amministratori. Non inserire dati
+                  personali nelle descrizioni o negli esempi da pubblicare.
+                </p>
+                <label className="checkbox-label">
                   <input
-                    name="website"
-                    value={website}
-                    onChange={(e) => setWebsite(e.target.value)}
-                    tabIndex={-1}
-                    autoComplete="off"
+                    required
+                    type="checkbox"
+                    checked={consent}
+                    onChange={(e) => setConsent(e.target.checked)}
                   />
+                  <span>
+                    Ho letto l’
+                    <Link to="/privacy" target="_blank">
+                      informativa privacy
+                    </Link>{' '}
+                    e acconsento al trattamento dei dati della proposta per la revisione e
+                    l’eventuale pubblicazione delle annotazioni.
+                  </span>
                 </label>
-              </div>
-              {contributionsOpen && <Turnstile onToken={setToken} resetKey={captchaReset} />}
-            </section>
+                <div className="honeypot" aria-hidden="true">
+                  <label>
+                    Sito web
+                    <input
+                      name="website"
+                      value={website}
+                      onChange={(e) => setWebsite(e.target.value)}
+                      tabIndex={-1}
+                      autoComplete="off"
+                    />
+                  </label>
+                </div>
+                {contributionsOpen && <Turnstile onToken={setToken} resetKey={captchaReset} />}
+              </section>
+            )}
           </>
         )}
         {error && <Notice error>{error}</Notice>}
@@ -392,17 +462,21 @@ export function Contribute() {
               <ArrowLeft size={17} aria-hidden="true" /> Indietro
             </button>
           ) : (
-            <span className="muted">Tre passaggi, nessuna registrazione.</span>
+            <span className="muted">
+              {administrative ? 'Contributo del revisore.' : 'Tre passaggi, nessuna registrazione.'}
+            </span>
           )}
           <button
             className="button primary"
             type="submit"
-            disabled={busy || (step === 2 && (!contributionsOpen || !token || !consent))}
+            disabled={busy || (step === 2 && !administrative && (!token || !consent))}
           >
             {busy
               ? 'Attendi…'
               : step === 2
-                ? 'Invia la proposta'
+                ? administrative
+                  ? 'Salva la proposta'
+                  : 'Invia la proposta'
                 : step === 1
                   ? 'Rivedi la proposta'
                   : 'Continua'}

@@ -3,6 +3,7 @@ import type {
   Filter,
   Proposal,
   ProposalInput,
+  AdminProposalInput,
   ProposalStatus,
   Revision,
   SignDetail,
@@ -119,6 +120,8 @@ export async function submitProposal(
     throw new Error(result?.message || 'Il servizio non risponde. Riprova più tardi.')
   return result.id
 }
+export const submitAdminProposal = async (proposal: AdminProposalInput): Promise<string> =>
+  checked(await client().rpc('submit_admin_proposal', { p_input: proposal }))
 export async function proposals(status: ProposalStatus | 'all', kind: string, offset = 0) {
   let q = client()
     .from('proposals')

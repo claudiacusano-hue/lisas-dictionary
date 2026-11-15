@@ -85,6 +85,7 @@ export interface ProposalInput {
   email: string
   consent: boolean
 }
+export type AdminProposalInput = Omit<ProposalInput, 'email' | 'consent'>
 export interface SignSummary {
   id: string
   gloss: string

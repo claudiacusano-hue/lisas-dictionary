@@ -38,6 +38,8 @@ npm run test:e2e         # Desktop, smartphone e axe
 6. Completa e fai verificare l’informativa privacy, poi abilita la raccolta sia nel frontend sia nell’Edge Function.
 7. Imposta GitHub Pages su **GitHub Actions** e configura le variabili del repository.
 
+I revisori autenticati possono salvare completamenti e correzioni anche prima dell’apertura dei contributi pubblici: dalla scheda segui il collegamento all’area riservata, salva una proposta con motivazione e approvala poi nel pannello. Occorre applicare anche la migrazione `20261115131907_admin_contributions.sql`; vedi il [percorso dei revisori](docs/deployment.md#completamenti-e-correzioni-dei-revisori).
+
 I passaggi e i comandi sono nella [guida di configurazione e pubblicazione](docs/deployment.md). Nessun progetto Supabase, account o deployment esterno è creato automaticamente da questo checkout.
 
 ## Struttura

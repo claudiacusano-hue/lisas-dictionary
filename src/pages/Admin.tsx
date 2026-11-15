@@ -20,7 +20,7 @@ import { vocabularyRequirements } from '../lib/vocabulary'
 import { DocumentEditor } from '../components/DocumentEditor'
 import { DocumentView } from '../components/DocumentView'
 import { DownloadButton, Loading, Notice, PageHeading } from '../components/ui'
-import { kindLabels } from './Contribute'
+import { Contribute, kindLabels } from './Contribute'
 import { validateDocument } from '../../supabase/functions/_shared/validation'
 import type {
   ProposalStatus,
@@ -175,6 +175,7 @@ export function Admin() {
       {error && <Notice error>{error}</Notice>}
       <Routes>
         <Route index element={<Queue />} />
+        <Route path="contribuisci" element={<Contribute administrative />} />
         <Route path="proposte/:id" element={<Review />} />
         <Route path="*" element={<p>Pagina amministrativa non trovata.</p>} />
       </Routes>

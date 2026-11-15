@@ -43,6 +43,14 @@ Il ruolo non deriva da metadati modificabili dal client. La pagina `/#/admin` us
 
 Il frontend non gestisce registrazioni o invii automatici di email. Le richieste di chiarimenti cambiano lo stato della proposta; il revisore usa il recapito facoltativo per contattare il contributore.
 
+### Completamenti e correzioni dei revisori
+
+I revisori possono creare proposte anche quando la raccolta pubblica è chiusa. Dalla scheda pubblicata, scegli **Completa la scheda** o **Suggerisci una correzione**, quindi **Accedi per contribuire come revisore**. Il collegamento conserva la scheda selezionata; se hai già effettuato l’accesso, non devi reinserire le credenziali. Compila i dati e una motivazione, rivedi e scegli **Salva la proposta**. La ricevuta permette di aprire la proposta nel pannello per approvarla separatamente.
+
+Questo percorso richiede la migrazione `20261115131907_admin_contributions.sql`, applicata al progetto remoto e allineata alla cronologia Supabase prima della distribuzione del frontend aggiornato. La RPC `submit_admin_proposal` verifica il ruolo amministrativo nel database, valida vocabolari e revisione di base, salva in coda privata e registra autore e motivazione nella cronologia. Non raccoglie un nuovo recapito o un consenso dei visitatori (`email` e `consent_at` rimangono null). La RPC pubblica originale resta riservata all’Edge Function, con antispam e consenso obbligatori per i contributi senza account.
+
+Quando la raccolta pubblica è chiusa, il sito presenta l’avviso prima della compilazione e il collegamento all’area riservata. Abilitare il lavoro dei revisori non richiede l’apertura dei contributi anonimi o l’uso di chiavi antispam di prova sul sito pubblico.
+
 ## 3. Frontend locale
 
 Copia `.env.example` in `.env.local` e compila:
